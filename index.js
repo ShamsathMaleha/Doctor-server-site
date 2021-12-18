@@ -5,7 +5,10 @@ require('dotenv').config();
 
 const admin = require("firebase-admin");
 const { MongoClient } = require('mongodb');
+const ObjectId = require('mongodb').ObjectId;
 const port = process.env.PORT || 5000
+
+const stripe = require('stripe')(process.env.STRIPE_SECRET)
 
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
@@ -56,11 +59,35 @@ async function run() {
           res.json(appointments);
       })
 
+      app.get('/appointments/:id', async(req, res)=>{
+          const id = req.params.id;
+          const query = {_id: ObjectId(id)}
+          const result = await appointmentsCollection.findOne(query)
+          res.json(result)
+      })
+
       app.post('/appointments', async (req, res) => {
           const appointment = req.body;
           const result = await appointmentsCollection.insertOne(appointment);
           res.json(result)
       });
+
+      app.put('/appointments/:id', async (req, res) => {
+        const id = req.params.id;
+        const payment = req.body;
+        const filter = {_id: ObjectId(id)}
+        // const options = { upsert: true };
+        const updateDoc = {
+           $set:{
+              payment: payment
+            }
+        };
+        const result = await appointmentsCollection.updateOne(filter, updateDoc);
+        res.json(result);
+      });
+
+
+      
 
 
     //   check admin 
@@ -109,11 +136,30 @@ async function run() {
 
       })
 
+      app.post("/create-payment-intent", async (req, res) => {
+        const paymentInfo = req.body;
+        const amount = paymentInfo.price*100
+        // Create a PaymentIntent with the order amount and currency
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amount,
+          currency: "usd",
+          
+          payment_methods_types: ['card']
+        });
+      
+        res.send({
+          clientSecret: paymentIntent.client_secret,
+        });
+      });
+
   }
   finally {
       // await client.close();
   }
 }
+
+
+
 
 run().catch(console.dir);
 
